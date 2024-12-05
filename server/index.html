@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hệ thống cảnh báo cháy</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Hệ thống cảm biến </h1>
+    <div class="main_body">
+        <div class="child1">
+            <p id="time">Thời gian:</p>
+            <p id="sensorStatus">Trạng thái</p>
+            <table id="sensorTable">
+                <thead>
+                    <tr>
+                        <th>Cảm biến khí ga</th>
+                        <th>Cảm biến lửa</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td id="gasStatus">N/A</td>
+                        <td id="flameStatus">N/A</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="child2">
+            <button id="toggleButton">Camera</button>
+            <img id="cameraStream"src="default_image.jpg" alt="Camera Stream">
+            <script src="/app.js"></script>
+        </div>
+    </div>
+</body>
+</html>

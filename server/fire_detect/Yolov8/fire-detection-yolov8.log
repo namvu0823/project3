@@ -1,0 +1,21 @@
+[{"stream_name":"stderr","time":1.88169655,"data":"/opt/conda/lib/python3.10/site-packages/traitlets/traitlets.py:2930: FutureWarning: --Exporter.preprocessors=[\"nbconvert.preprocessors.ExtractOutputPreprocessor\"] for containers is deprecated in traitlets 5.0. You can pass `--Exporter.preprocessors item` ... multiple times to add items to a list.\n"}
+,{"stream_name":"stderr","time":1.881783871,"data":"  warn(\n"}
+,{"stream_name":"stderr","time":1.885675981,"data":"[NbConvertApp] WARNING | Config option `kernel_spec_manager_class` not recognized by `NbConvertApp`.\n"}
+,{"stream_name":"stderr","time":1.918255114,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":2.884835383,"data":"[NbConvertApp] Support files will be in __results___files/\n"}
+,{"stream_name":"stderr","time":2.884884281,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.885239145,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.885506034,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.886320495,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.8868031419999998,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.887105914,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.887384343,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.887845814,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.888183249,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.888462869,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.88880207,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.889157963,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.889487656,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.889791015,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":2.8902095770000003,"data":"[NbConvertApp] Writing 325498 bytes to __results__.html\n"}
+]

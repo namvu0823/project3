@@ -1,5 +1,7 @@
 
-const ws = new WebSocket(`ws://${window.location.hostname}:3001`); // địa chỉ IP của laptop
+const sensorWs = new WebSocket(`ws://${window.location.hostname}:3001`); // địa chỉ IP của laptop
+const cameraWs = new WebSocket(`ws://${window.location.hostname}:3002`); // địa chỉ IP của laptop
+
 const streamImage = document.getElementById('cameraStream');
 const toggleButton = document.getElementById('toggleButton');
 const sensorStatus = document.getElementById('sensorStatus');
@@ -11,16 +13,15 @@ let previousBlobUrl = null;
 
 //xử lý khi click camera
 toggleButton.addEventListener('click', () => {
-    if (ws.readyState === WebSocket.OPEN) {
+    if (cameraWs.readyState === WebSocket.OPEN) {
         isStreaming = !isStreaming;
         toggleButton.textContent = isStreaming 
             ? 'Tắt camera' 
             : 'Bật camera';
         
-        ws.send(isStreaming ? 'camera_enable' : 'camera_disable');
+        cameraWs.send(isStreaming ? 'camera_enable' : 'camera_disable');
 
         if (!isStreaming) {
-            
             if (previousBlobUrl) {
                 URL.revokeObjectURL(previousBlobUrl); // Giải phóng URL cũ
                 previousBlobUrl = null;
@@ -32,23 +33,14 @@ toggleButton.addEventListener('click', () => {
     }
 });
 
-ws.onmessage = (event) => {
-    //xử lý streaming
-    if (event.data instanceof Blob)//nếu là data dạng nhị phân
-    {
-        if (previousBlobUrl) {
-            URL.revokeObjectURL(previousBlobUrl); // Giải phóng URL cũ
-        }
-        // Tạo URL từ Blob và gắn vào thẻ img
-        previousBlobUrl = URL.createObjectURL(event.data);
-        streamImage.src = previousBlobUrl;
-    } 
-
-    else {
-        const sensorData = JSON.parse(event.data);
+sensorWs.onmessage = (event) => {
+    try {
+        const data = JSON.parse(event.data);
         if (sensorData.hasOwnProperty('gas') && sensorData.hasOwnProperty('flame')) {
-            updateSensorStatus(sensorData); // Cập nhật giao diện
-        } 
+            updateSensorStatus(data);
+        }
+        } catch (error) {
+            console.error('Error parsing JSON:', error);
     }
 };
 
@@ -82,20 +74,50 @@ function updateSensorStatus(sensorData) {
     // Cập nhật trạng thái vào giao diện
     sensorStatus.textContent = `Trạng thái: ${statusMessage}`;
     sensorStatus.style.color = statusColor;
+
     const now = new Date();
     const timeString = now.toLocaleTimeString();
     time.textContent = ' Thời gian: '+timeString;
-
 }
-ws.onopen = () => {
+
+cameraWs.onopen = () => {
     console.log('WebSocket connected');
 };
 
-ws.onclose = () => {
+cameraWs.onclose = () => {
     console.log('WebSocket disconnected');
-    alert('WebSocket connection lost. Please reload the page.');
+    if (isStreaming) {
+        alert('WebSocket connection lost. Please reload the page.');
+        streamImage.src = defaultImage;
+        isStreaming = false;
+        toggleButton.textContent = 'Bật camera';
+    }
 };
 
-ws.onerror = (error) => {
+cameraWs.onerror = (error) => {
     console.error('WebSocket error:', error);
 };
+
+sensorWs.onopen = () => {
+    console.log('Kết nối sensor WebSocket thành công');
+};
+
+sensorWs.onclose = () => {
+    console.log('Mất kết nối sensor WebSocket');
+    alert('Mất kết nối với cảm biến. Vui lòng tải lại trang.');
+};
+
+sensorWs.onerror = (error) => {
+    console.error('Lỗi sensor WebSocket:', error);
+};
+
+// Hàm kiểm tra trạng thái kết nối
+function checkConnections() {
+    if (sensorWs.readyState !== WebSocket.OPEN || cameraWs.readyState !== WebSocket.OPEN) {
+        sensorStatus.textContent = 'Trạng thái: Mất kết nối với thiết bị';
+        sensorStatus.style.color = 'red';
+    }
+}
+
+// Kiểm tra kết nối định kỳ
+setInterval(checkConnections, 5000);

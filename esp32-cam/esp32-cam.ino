@@ -37,8 +37,9 @@
 // Network Configuration
 const char *ssid = "Dong Tay 4G";
 const char *password = "88888888";
-const char *websockets_server_host = "192.168.1.204";
-const uint16_t websockets_server_port = 3001;
+const char *websockets_server_host = "192.168.1.218";
+const uint16_t sensor_ws_port = 3001;
+const uint16_t camera_ws_port = 3002;
 
 // Timing Constants
 const unsigned long IMAGE_SEND_INTERVAL = 100;   // 10 FPS
@@ -48,7 +49,8 @@ const int MAX_RECONNECT_ATTEMPTS = 5;
 
 // Global Variables
 using namespace websockets;
-WebsocketsClient client;
+WebsocketsClient sensorClient;
+WebsocketsClient cameraClient;
 bool isCameraEnabled = false;
 unsigned long lastImageSend = 0;
 unsigned long lastSensorSend = 0;
@@ -81,74 +83,66 @@ esp_err_t init_camera()
   config.jpeg_quality = 15;
   config.fb_count = 2;
 
-  esp_err_t err = esp_camera_init(&config);
-  if (err != ESP_OK)
-  {
-    Serial.printf("Camera init failed with error 0x%x\n", err);
-    return err;
-  }
-  Serial.println("Camera initialized successfully");
-  return ESP_OK;
+  return esp_camera_init(&config);
 }
 
-void onMessageCallback(WebsocketsMessage message)
+void onSensorMessageCallback(WebsocketsMessage message)
 {
   String msg = message.data();
-  Serial.printf("Received message: %s\n", msg.c_str());
+  Serial.println(String("Sensor socket received: ") + msg.c_str());
 
-  if (msg.startsWith("{") && msg.endsWith("}"))
+  if (msg == "get_sensor_data")
   {
-    Serial.println("Received sensor data");
+    sendSensorData();
   }
-  else if (msg == "camera_enable")
+}
+
+void onCameraMessageCallback(WebsocketsMessage message)
+{
+  String msg = message.data();
+  Serial.println(String("Camera socket received: ") + msg.c_str());
+
+
+  if (msg == "enable_camera")
   {
     isCameraEnabled = true;
     Serial.println("Camera streaming enabled");
   }
-  else if (msg == "camera_disable")
+  else if (msg == "disable_camera")
   {
     isCameraEnabled = false;
     Serial.println("Camera streaming disabled");
   }
-  else
-  {
-    Serial.println("Unknown command");
-  }
 }
 
-esp_err_t init_wifi()
+esp_err_t init_websockets()
 {
-  WiFi.begin(ssid, password);
-  Serial.println("Connecting to WiFi...");
-
-  int wifiAttempts = 0;
-  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 20)
+  sensorClient.onMessage(onSensorMessageCallback);
+  bool sensorConnected = sensorClient.connect(websockets_server_host, sensor_ws_port, "/");
+  if (sensorConnected)
   {
-    delay(500);
-    Serial.print(".");
-    wifiAttempts++;
+    Serial.println("Connected to sensor socket");
+    sensorClient.send("ESP32_SENSOR");
   }
-
-  if (WiFi.status() != WL_CONNECTED)
+  else
   {
-    Serial.println("\nWiFi connection failed");
+    Serial.println("Failed to connect to sensor socket");
     return ESP_FAIL;
   }
 
-  Serial.println("\nWiFi connected");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP());
-
-  client.onMessage(onMessageCallback);
-  bool connected = client.connect(websockets_server_host, websockets_server_port, "/");
-  if (!connected)
+  cameraClient.onMessage(onCameraMessageCallback);
+  bool cameraConnected = cameraClient.connect(websockets_server_host, camera_ws_port, "/");
+  if (cameraConnected)
   {
-    Serial.println("WebSocket connection failed");
+    Serial.println("Connected to camera socket");
+    cameraClient.send("ESP32_CAMERA");
+  }
+  else
+  {
+    Serial.println("Failed to connect to camera socket");
     return ESP_FAIL;
   }
 
-  Serial.println("WebSocket connected");
-  client.send("ESP32");
   return ESP_OK;
 }
 
@@ -161,11 +155,11 @@ void sendSensorData()
   digitalWrite(LED_PIN, (gasDetected || flameDetected) ? HIGH : LOW);
 
   // Only send data if we have a valid connection
-  if (client.available())
+  if (sensorClient.available())
   {
     String data = "{\"gas\":" + String(gasDetected ? "true" : "false") +
                   ",\"flame\":" + String(flameDetected ? "true" : "false") + "}";
-    client.send(data);
+    sensorClient.send(data);
     Serial.println("Sent sensor data: " + data);
   }
 }
@@ -174,12 +168,9 @@ bool reconnectWebSocket()
 {
   if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS)
   {
-    Serial.println("WebSocket disconnected, reconnecting...");
-    bool connected = client.connect(websockets_server_host, websockets_server_port, "/");
-    if (connected)
+    Serial.println("Attempting to reconnect WebSockets...");
+    if (init_websockets() == ESP_OK)
     {
-      Serial.println("Reconnected successfully");
-      client.send("ESP32");
       reconnectAttempts = 0;
       return true;
     }
@@ -210,10 +201,17 @@ void setup()
     return;
   }
 
-  // Initialize WiFi and WebSocket
-  if (init_wifi() != ESP_OK)
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED)
   {
-    Serial.println("WiFi/WebSocket initialization failed");
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
+
+  if (init_websockets() != ESP_OK)
+  {
+    Serial.println("WebSockets initialization failed");
     return;
   }
 }
@@ -221,7 +219,7 @@ void setup()
 void loop()
 {
   // Check WebSocket connection
-  if (!client.available())
+  if (!sensorClient.available())
   {
     if (!reconnectWebSocket())
     {
@@ -230,7 +228,8 @@ void loop()
   }
 
   // Handle WebSocket messages
-  client.poll();
+  sensorClient.poll();
+  cameraClient.poll();
 
   // Send sensor data at specified interval
   if (millis() - lastSensorSend >= SENSOR_SEND_INTERVAL)
@@ -245,9 +244,9 @@ void loop()
     camera_fb_t *fb = esp_camera_fb_get();
     if (fb)
     {
-      if (client.available())
+      if (cameraClient.available())
       {
-        client.sendBinary((const char *)fb->buf, fb->len);
+        cameraClient.sendBinary((const char *)fb->buf, fb->len);
         Serial.printf("Image sent: %d bytes\n", fb->len);
       }
       esp_camera_fb_return(fb);

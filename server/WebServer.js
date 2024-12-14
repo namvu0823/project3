@@ -1,112 +1,131 @@
-const http = require('http');
-const fs = require('fs');
+
+const express =require('express');
 const path = require('path');
+const bodyParser=require('body-parser');
 const WebSocket = require('ws'); 
+const app=express();
+
+const {MongoClient} = require('mongodb');
+const uri="mongodb+srv://vuvannamb1:hxruOlLP2VlAsXK0@cluster0.2kdmx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const client = new MongoClient(uri);
+
 
 const PORT = 3001;
-
-let esp32Client=null;
 const webClients= new Set();
 
-// Tạo HTTP Server
-const server = http.createServer((req, res) => {
-    if (req.method === 'GET') {
-        if (req.url === '/') {
-            // index.html
-            fs.readFile(path.join(__dirname, 'index.html'), (err, data) => {
-                if (err) {
-                    res.writeHead(500, { 'Content-Type': 'text/plain' });
-                    res.end('Internal Server Error');
-                } else {
-                    res.writeHead(200, { 'Content-Type': 'text/html' });
-                    res.end(data);
+app.use(express.static(__dirname + '/../client/login'));
+app.use(express.static(__dirname + '/../client/public'));
+
+app.use(bodyParser.json());//xử lý json từ các cient;
+
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..','client','login', 'login.html'));
+});
+
+app.get('/app', (req, res) => { 
+    res.sendFile(path.join(__dirname, '..','client', 'public', 'app.html'));
+});
+
+app.post('/login', async(req, res) => {
+    const { email, password } = req.body;
+    try{
+        const user = await db.collection('users').findOne({ email :email});
+        if(user){
+            if(user.password===password){
+                res.json({message: 'Đăng nhập thành công',user_id:user.id});
                 }
-            });
-        } else if (req.url === '/app.js') {
-            // app.js
-            fs.readFile(path.join(__dirname, 'app.js'), (err, data) => {
-                if (err) {
-                    res.writeHead(404, { 'Content-Type': 'text/plain' });
-                    res.end('File not found');
-                } else {
-                    res.writeHead(200, { 'Content-Type': 'application/javascript' });
-                    res.end(data);
-                }
-            });
-        } 
-        else if (req.url === '/style.css') {
-            // style.css
-            fs.readFile(path.join(__dirname, 'style.css'), (err, data) => {
-                if (err) {
-                    res.writeHead(404, { 'Content-Type': 'text/plain' });
-                    res.end('File not found');
-                } else {
-                    res.writeHead(200, { 'Content-Type': 'text/css' });
-                    res.end(data);
-                }
-            });
-        }else {
-            // handle error
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('Not Found');
+            else{
+                res.status(401).json({message: 'Mật khẩu không đúng'});
+            }
         }
+        else{
+            res.status(401).json({message: 'Email không đúng'});
+        }
+    }
+    catch(error){
+        console.error('Lỗi khi đăng nhập:', error);
+        res.status(500).json({message: 'Lỗi server'});
     }
 });
 
-// Tạo WebSocket Server
+//http server
+const server=app.listen(PORT,()=>{
+    console.log(`Server running at http://localhost:${PORT}`);
+});
+
+let esp32Client=null;
+//mongodb server
+let db;
+
+async function connectToDatabase() {
+    try {
+        await client.connect();
+        console.log("Đã kết nối đến MongoDB Atlas");
+
+        // Lấy database
+        db = client.db('prj3_data'); 
+    } catch (error) {
+        console.error("Không thể kết nối MongoDB:", error);
+    }
+}
+
+// Kết nối đến database khi khởi động server
+connectToDatabase();
+
 const wss = new WebSocket.Server({ server });
-//khi client kết nối
 
 wss.on('connection', (ws) => {
-    console.log('New WebSocket connection');
-    ws.on('message', (message) => {
-       
-        if (!esp32Client && message.toString() === 'ESP32') {
-            // Xác định client này là ESP32
-            esp32Client = ws;
-            console.log('ESP32 connected');
-            return;
-        }
-        if (ws === esp32Client) //nếu là esp32
-        {
-            if (message instanceof Buffer) {
-                
-                if(message.length > 100){
-                    console.log('Images data:', message.length, 'bytes')
-                     // Broadcast tới tất cả client
-                    wss.clients.forEach(client => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(message, { binary: true });
-                        }
-                    });
-                } 
-                else {
-                    try{
-                        const sensorData=JSON.parse(message.toString());
-                            wss.clients.forEach(client => {if (client.readyState === WebSocket.OPEN){
-                                client.send(JSON.stringify(sensorData));
+    
+
+        console.log('New WebSocket connection');
+
+        ws.on('message', (message) => {   
+            if (!esp32Client && message.toString() === 'ESP32') {
+                esp32Client = ws;
+                console.log('ESP32 connected');
+                return;
+            }
+
+            if (ws === esp32Client) //nếu là esp32
+            {
+                if (message instanceof Buffer) {
+                    
+                    if(message.length > 100){
+                        console.log('Images data:', message.length, 'bytes')
+                        // Broadcast tới tất cả client
+                        wss.clients.forEach(client => {
+                            if (client.readyState === WebSocket.OPEN) {
+                                client.send(message, { binary: true });
                             }
                         });
-                        console.log('Sensor data: ', sensorData);
-                    }
-                    catch(error){
-                        console.error('Invalid data:', message.toString());
+                    } 
+                    else {
+                        try{
+                            const sensorData=JSON.parse(message.toString());
+                                wss.clients.forEach(client => {if (client.readyState === WebSocket.OPEN){
+                                    client.send(JSON.stringify(sensorData));
+                                }
+                            });
+                            console.log('Sensor data: ', sensorData);
+                        }
+                        catch(error){
+                            console.error('Invalid data:', message.toString());
+                        }
                     }
                 }
+            } 
+
+            else {
+    
+                if (esp32Client && esp32Client.readyState === WebSocket.OPEN) {
+                    // Gửi lệnh từ Web client tới ESP32
+                    esp32Client.send(message.toString());
+                }
             }
-        } 
 
+        });
 
-        else {
-            // Nếu nhận dữ liệu từ Web client
-            console.log('Message from Web client:', message.toString());
-
-            if (esp32Client && esp32Client.readyState === WebSocket.OPEN) {
-                // Gửi lệnh từ Web client tới ESP32
-                esp32Client.send(message.toString());
-            }
-        }
-    });
     ws.on('close', () => {
         if (ws === esp32Client) {
             console.log('ESP32 disconnected');
@@ -116,14 +135,10 @@ wss.on('connection', (ws) => {
             webClients.delete(ws);
         }
     });
+
     if (ws !== esp32Client) {
         webClients.add(ws);
     }
+    
 });
 
-
-// run server HTTP và WebSocket
-server.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-    console.log(`WebSocket server running on ws://localhost:${PORT}`);
-});
